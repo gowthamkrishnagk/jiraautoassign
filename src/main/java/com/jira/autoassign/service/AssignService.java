@@ -103,6 +103,8 @@ public class AssignService {
                     log.error("  [FAILED] Could not assign {}", issueKey);
                     failed++;
                 }
+                // Pause between assignments to avoid Jira rate limiting (429)
+                jiraClient.pauseBetweenAssignments();
             }
 
             currentIndex++;

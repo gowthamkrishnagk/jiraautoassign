@@ -1,4 +1,5 @@
 target/
+src/main/resources/application.properties
 *.jar
 *.class
 round_robin_state.json

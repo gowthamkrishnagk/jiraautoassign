@@ -114,9 +114,35 @@ public class JiraClient {
         HttpEntity<Map<String, String>> request = new HttpEntity<>(
                 Map.of("accountId", accountId), authHeaders());
 
-        ResponseEntity<Void> response = restTemplate.exchange(
-                url, HttpMethod.PUT, request, Void.class);
+        // Retry up to 3 times on 429 rate limit with increasing delays
+        int[] retryDelaysMs = {5000, 15000, 30000};
+        for (int attempt = 0; attempt <= retryDelaysMs.length; attempt++) {
+            try {
+                ResponseEntity<Void> response = restTemplate.exchange(
+                        url, HttpMethod.PUT, request, Void.class);
+                return response.getStatusCode() == HttpStatus.NO_CONTENT;
+            } catch (org.springframework.web.client.HttpClientErrorException e) {
+                if (e.getStatusCode().value() == 429 && attempt < retryDelaysMs.length) {
+                    log.warn("Rate limited by Jira. Waiting {}ms before retry {}/{}...",
+                            retryDelaysMs[attempt], attempt + 1, retryDelaysMs.length);
+                    try { Thread.sleep(retryDelaysMs[attempt]); } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                    }
+                } else {
+                    log.error("Failed to assign {}: {}", issueKey, e.getMessage());
+                    return false;
+                }
+            }
+        }
+        return false;
+    }
 
-        return response.getStatusCode() == HttpStatus.NO_CONTENT;
+    /** Small delay between ticket assignments to avoid hitting Jira rate limits */
+    public void pauseBetweenAssignments() {
+        try {
+            Thread.sleep(1000); // 1 second between each assignment
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 }
