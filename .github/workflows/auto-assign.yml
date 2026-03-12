@@ -1,0 +1,43 @@
+name: Jira Auto Assign
+
+on:
+  schedule:
+    # Runs every 30 minutes
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+    # Allows you to trigger manually from GitHub UI anytime
+
+jobs:
+  assign:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Create application.properties from secrets
+        run: |
+          mkdir -p src/main/resources
+          cat > src/main/resources/application.properties << EOF
+          jira.url=${{ secrets.JIRA_URL }}
+          jira.email=${{ secrets.JIRA_EMAIL }}
+          jira.api-token=${{ secrets.JIRA_API_TOKEN }}
+          jira.project-key=${{ secrets.JIRA_PROJECT_KEY }}
+          jira.assignees=${{ secrets.JIRA_ASSIGNEES }}
+          jira.custom-jql=${{ secrets.JIRA_CUSTOM_JQL }}
+          jira.only-unassigned=true
+          jira.dry-run=false
+          jira.schedule.cron=0 */30 * * * *
+          EOF
+
+      - name: Build
+        run: mvn clean package -DskipTests --no-transfer-progress
+
+      - name: Run assignment
+        run: java -jar target/autoassign-1.0.0.jar --once
