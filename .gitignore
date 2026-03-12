@@ -1,0 +1,16 @@
+target/
+*.jar
+*.class
+round_robin_state.json
+.env
+*.log
+
+# IDE files
+.idea/
+*.iml
+.vscode/
+*.eclipse
+
+# OS files
+.DS_Store
+Thumbs.db
