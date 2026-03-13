@@ -69,21 +69,39 @@ public class AssignService {
 
         // Fetch tickets matching the configured filters
         List<JsonNode> tickets = jiraClient.getTickets();
+
+        long unassignedCount = tickets.stream()
+                .filter(t -> t.get("fields").get("assignee").isNull())
+                .count();
+        long alreadyAssignedCount = tickets.size() - unassignedCount;
+
+        log.info("--------------------------------------------------");
+        log.info("Total tickets fetched     : {}", tickets.size());
+        log.info("Unassigned (to process)   : {}", unassignedCount);
+        log.info("Already assigned (skipped): {}", alreadyAssignedCount);
+        log.info("--------------------------------------------------");
+
         if (tickets.isEmpty()) {
             log.info("No tickets found matching the criteria.");
             return;
         }
 
-        log.info("Found {} ticket(s) to assign.", tickets.size());
-
         int currentIndex = loadIndex();
         int assigned = 0;
         int failed = 0;
+        int skipped = 0;
 
         for (JsonNode ticket : tickets) {
             String issueKey = ticket.get("key").asText();
             String summary = ticket.get("fields").get("summary").asText();
             String issueType = ticket.get("fields").get("issuetype").get("name").asText();
+            boolean isUnassigned = ticket.get("fields").get("assignee").isNull();
+
+            if (!isUnassigned) {
+                log.info("[{}] ({}) SKIPPED — already assigned | {}", issueKey, issueType, summary);
+                skipped++;
+                continue;
+            }
 
             // Pick the next assignee in round-robin order
             String assigneeEmail = assignees.get(currentIndex % assignees.size());
@@ -115,7 +133,12 @@ public class AssignService {
             saveIndex(currentIndex);
         }
 
-        log.info("=== Done: {} assigned, {} failed. Next assignee: {} ===",
-                assigned, failed, assignees.get(currentIndex % assignees.size()));
+        log.info("--------------------------------------------------");
+        log.info("SUMMARY");
+        log.info("  Assigned : {}", assigned);
+        log.info("  Skipped  : {}", skipped);
+        log.info("  Failed   : {}", failed);
+        log.info("  Next assignee: {}", assignees.get(currentIndex % assignees.size()));
+        log.info("--------------------------------------------------");
     }
 }

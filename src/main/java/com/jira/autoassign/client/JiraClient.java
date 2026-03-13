@@ -9,6 +9,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
@@ -57,7 +58,7 @@ public class JiraClient {
         String jql;
 
         if (props.getCustomJql() != null && !props.getCustomJql().isBlank()) {
-            // Use custom JQL directly — ignores all other filter properties
+            // Use custom JQL exactly as configured in application.properties
             jql = props.getCustomJql();
             log.info("Using custom JQL: {}", jql);
         } else {
@@ -66,7 +67,7 @@ public class JiraClient {
             conditions.add("project = " + props.getProjectKey());
 
             if (props.isOnlyUnassigned()) {
-                conditions.add("assignee is EMPTY");
+                conditions.add("assignee = EMPTY");
             }
 
             if (props.getTargetStatuses() != null && !props.getTargetStatuses().isEmpty()) {
@@ -91,15 +92,19 @@ public class JiraClient {
             log.info("Using built JQL: {}", jql);
         }
 
-        String url = UriComponentsBuilder
-                .fromHttpUrl(props.getUrl() + "/rest/api/3/search")
-                .queryParam("jql", jql)
+        // Use expand() to safely encode JQL without double-encoding special characters
+        URI uri = UriComponentsBuilder
+                .fromHttpUrl(props.getUrl() + "/rest/api/3/search/jql")
+                .queryParam("jql", "{jql}")
                 .queryParam("maxResults", 100)
                 .queryParam("fields", "summary,assignee,status,issuetype,labels")
-                .toUriString();
+                .build()
+                .expand(jql)
+                .encode()
+                .toUri();
 
         ResponseEntity<JsonNode> response = restTemplate.exchange(
-                url, HttpMethod.GET, new HttpEntity<>(authHeaders()), JsonNode.class);
+                uri, HttpMethod.GET, new HttpEntity<>(authHeaders()), JsonNode.class);
 
         List<JsonNode> tickets = new ArrayList<>();
         if (response.getBody() != null && response.getBody().has("issues")) {
